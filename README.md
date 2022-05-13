@@ -2,6 +2,7 @@
  Where are you?
 
 ### Functions:
+```lua
     `string` PLAYER:Country() - returns ISO 3166-1 alpha-2 countryc code
     `boolean` PLAYER:IsListenServerHost() - Returns `true` if player is server host
     `string` PLAYER:SourceNick() - Returns original player nickname
@@ -19,6 +20,9 @@
         PLAYER:SetData( key, value ) - Set player data var
         `any` PLAYER:GetData( key, default ) - Get player data var
         `table` PLAYER:GetAllData() - Get all player data
+```
 
 ### Hooks:
+```lua
     GM:OnPlayerDropWeapon( `entity` ply, `entity` wep, `vector` target, `vector` velocity ) - Return false for block weapon drop
+```
