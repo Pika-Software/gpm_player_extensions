@@ -2,7 +2,7 @@ Name = "Player Extensions"
 Description = "Extending the player meta functionality on Garry's Mod."
 
 Author = "PrikolMen:-b"
-Version = "1.0.0"
+Version = "1.1.0"
 License = "MIT"
 
 Dependencies = {

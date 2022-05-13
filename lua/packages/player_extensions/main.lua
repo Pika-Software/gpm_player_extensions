@@ -1,3 +1,4 @@
+local logger = GPM.Logger( "Player Extensions" )
 local PLAYER = FindMetaTable( "Player" )
 
 /*
@@ -230,10 +231,15 @@ end
             `table` PLAYER:GetAllData() - Get all player data
             PLAYER:SetData( key, value ) - Set player data var
             `any` PLAYER:GetData( key, default ) - Get player data var
+
+        Hooks:
+            GM:PlayerDataLoaded( ply, result, data )
+            GM:PlayerDataSaved( ply, result )
 */
 if (SERVER) then
 
     local sql_name = "Player@Data"
+    local hook_Run = hook.Run
 
     do
 
@@ -244,17 +250,19 @@ if (SERVER) then
         function PLAYER:LoadData()
             local sql_data = self:GetSQL( sql_name, nil )
             if (sql_data ~= nil) then
-                local data = util_Decompress( sql_data )
-                if (data ~= empty_string) then
-                    local json = util_JSONToTable( data )
-                    if (json ~= nil) then
-                        self.PlayerData = json
+                local json = util_Decompress( sql_data )
+                if (json ~= empty_string) then
+                    local data = util_JSONToTable( json )
+                    if (data ~= nil) then
+                        self.PlayerData = data
+                        hook_Run( "PlayerDataLoaded", self, true, data )
                         return true
                     end
                 end
             end
 
             self.PlayerData = {}
+            hook_Run( "PlayerDataLoaded", self, false, self.PlayerData )
             return false
         end
 
@@ -267,16 +275,22 @@ if (SERVER) then
         local empty_table = {}
 
         function PLAYER:SaveData()
-            return sefl:SetSQL( sql_name, util_Compress( util_TableToJSON( self.PlayerData or empty_table ) ) )
+            local result = sefl:SetSQL( sql_name, util_Compress( util_TableToJSON( self.PlayerData or empty_table ) ) )
+            hook_Run( "PlayerDataSaved", ply, result )
+            return result
         end
+
     end
 
-    hook.Add("PlayerInitialSpawn", sql_name, function( ply )
-        ply:LoadData()
+    hook.Add( "PlayerInitialSpawn", sql_name, PLAYER.LoadData )
+    hook.Add( "PlayerDisconnected", sql_name, PLAYER.SaveData )
+
+    hook.Add("PlayerDataLoaded", sql_name, function( ply, result )
+        logger:info( "Player {1} ({2}) data {3}.", ply:Nick(), ply:SteamID(), result and "successfully loaded" or "load failed" )
     end)
 
-    hook.Add("PlayerDisconnected", sql_name, function( ply )
-        ply:SaveData()
+    hook.Add("PlayerDataSaved", sql_name, function( ply, result )
+        logger:info( "Player {1} ({2}) data {3}.", ply:Nick(), ply:SteamID(), result and "successfully saved" or "save failed" )
     end)
 
     function PLAYER:SetData( key, value )
