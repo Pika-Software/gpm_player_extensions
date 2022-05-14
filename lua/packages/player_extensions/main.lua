@@ -1,4 +1,5 @@
-local logger = GPM.Logger( "Player Extensions" )
+local packageName = "Player Extensions"
+local logger = GPM.Logger( packageName )
 local PLAYER = FindMetaTable( "Player" )
 
 /*
@@ -17,6 +18,9 @@ do
     local cvar = GetConVar( "default_language" )
     if (cvar) then
         default_language = cvar:GetString()
+        cvars.AddChangeCallback("default_language", function( name, old, new )
+            default_language = new
+        end, packageName)
     end
 
     if (CLIENT) then
@@ -202,23 +206,112 @@ end
 */
 do
 
-    local database_name = "players_db"
+    module( "player_db", package.seeall )
 
-    local sql_SQLStr = sql.SQLStr
     local sql_Query = sql.Query
-    local sql_QueryValue = sql.QueryValue
+    local sql_SQLStr = sql.SQLStr
 
-    local sample = "%s[%s]"
-    function PLAYER:GetSQL( key, default )
-        return sql_QueryValue( "SELECT value FROM " .. database_name .. " WHERE infoid = " .. sql_SQLStr( sample:format( self:SteamID64(), key ) ) .. " LIMIT 1" ) or default
+    function CreateTable( str )
+        game_ready.wait(function()
+            sql_Query( "CREATE TABLE IF NOT EXISTS `" .. str .."` ( `steamid64` TEXT NOT NULL PRIMARY KEY, `data` TEXT NOT NULL);" )
+        end)
     end
 
-    function PLAYER:SetSQL( key, value )
-        return sql_Query( "REPLACE INTO " .. database_name .. " (infoid, value) VALUES (" .. sql_SQLStr( sample:format( self:SteamID64(), key ) ) .. ", " .. sql_SQLStr(value) .. " )" ) ~= false
+    local table_name = CreateConVar( "mysql_player_db_table", "player_db", FCVAR_ARCHIVE, " - MySQL table name with players data." ):GetString()
+    CreateTable( table_name )
+
+    cvars.AddChangeCallback("mysql_player_db_table", function( name, old, new )
+        CreateTable( new )
+        table_name = new
+    end, packageName)
+
+    do
+
+        local util_JSONToTable = util.JSONToTable
+        local sql_QueryValue = sql.QueryValue
+
+        function GetData( steamid64 )
+            local result = sql_QueryValue( "SELECT `data` FROM `" .. table_name .. "` WHERE `steamid64` = " .. sql_SQLStr( steamid64 ) )
+            if !result then
+                return {}
+            end
+
+            return util_JSONToTable( result ) or {}
+        end
+
     end
 
-    function PLAYER:ClearSQL( key )
-        return sql_Query( "DELETE FROM " .. database_name .. " WHERE infoid = " .. sql_SQLStr( sample:format( self:SteamID64(), key ) ) ) ~= false
+    do
+
+        local cache = {}
+        local SysTime = SysTime
+
+        function PLAYER:GetSQL( key, default )
+            local steamid64 = self:SteamID64()
+            if (cache[ steamid64 ] == nil) then
+                cache[ steamid64 ] = {}
+            end
+
+            local entry = cache[ steamid64 ][ key ]
+            if (entry == nil) or (SysTime() > entry[ 1 ]) then
+                cache[ steamid64 ][ key ] = { SysTime() + 30, GetData( steamid64 )[ key ] }
+            end
+
+            return cache[ steamid64 ][ key ][ 2 ] or default
+        end
+
+    end
+
+    do
+
+        local util_TableToJSON = util.TableToJSON
+        local table_Merge = table.Merge
+        local sql_Commit = sql.Commit
+        local sql_Begin = sql.Begin
+        local pairs = pairs
+
+        local queue = {}
+
+        function SyncData()
+            sql_Begin()
+
+            for steamid64, data in pairs( queue ) do
+                if (data == nil) then continue end
+                sql_Query( "INSERT OR REPLACE INTO `" .. table_name .."` ( steamid64, data ) VALUES ( " .. sql_SQLStr( steamid64 ) .. ", " .. sql_SQLStr( util_TableToJSON( table_Merge( GetData( steamid64 ), data ) ) ) .. " );" )
+            end
+
+            sql_Commit()
+        end
+
+        do
+            local timer_Create = timer.Create
+            function AddQueue( steamid64, key, value, force )
+                if (queue[ steamid64 ] == nil) then
+                    queue[ steamid64 ] = {}
+                end
+
+                queue[ steamid64 ][ key ] = value
+
+                if (force) then
+                    SyncData()
+                end
+
+                timer_Create( "player_db", 0.025, 1, SyncData )
+
+                return true
+            end
+        end
+
+    end
+
+    function PLAYER:SetSQL( key, value, force )
+        if self:IsBot() then return false end
+        return AddQueue( self:SteamID64(), key, value, force )
+    end
+
+    function PLAYER:ClearSQL()
+        if self:IsBot() then return false end
+        return sql_Query( "DELETE FROM `" .. table_name .."` WHERE `steamid64` = " .. self:SteamID64() .. ";" ) ~= false
     end
 
 end
@@ -244,20 +337,16 @@ if (SERVER) then
     do
 
         local util_JSONToTable = util.JSONToTable
-        local util_Decompress = util.Decompress
         local empty_string = ""
 
         function PLAYER:LoadData()
             local sql_data = self:GetSQL( sql_name, nil )
             if (sql_data ~= nil) then
-                local json = util_Decompress( sql_data )
-                if (json ~= empty_string) then
-                    local data = util_JSONToTable( json )
-                    if (data ~= nil) then
-                        self.PlayerData = data
-                        hook_Run( "PlayerDataLoaded", self, true, data )
-                        return true
-                    end
+                local data = util_JSONToTable( sql_data )
+                if (data ~= nil) then
+                    self.PlayerData = data
+                    hook_Run( "PlayerDataLoaded", self, true, data )
+                    return true
                 end
             end
 
@@ -271,12 +360,11 @@ if (SERVER) then
     do
 
         local util_TableToJSON = util.TableToJSON
-        local util_Compress = util.Compress
         local empty_table = {}
 
-        function PLAYER:SaveData()
-            local result = sefl:SetSQL( sql_name, util_Compress( util_TableToJSON( self.PlayerData or empty_table ) ) )
-            hook_Run( "PlayerDataSaved", ply, result )
+        function PLAYER:SaveData( force )
+            local result = self:SetSQL( sql_name, util_TableToJSON( self.PlayerData or empty_table ), force )
+            hook_Run( "PlayerDataSaved", self, result )
             return result
         end
 
@@ -284,6 +372,13 @@ if (SERVER) then
 
     hook.Add( "PlayerInitialSpawn", sql_name, PLAYER.LoadData )
     hook.Add( "PlayerDisconnected", sql_name, PLAYER.SaveData )
+
+    hook.Add("ShutDown", sql_name, function()
+        hook.Remove( "PlayerDisconnected", sql_name )
+        for num, ply in ipairs( player.GetAll() ) do
+            ply:SaveData( true )
+        end
+    end)
 
     hook.Add("PlayerDataLoaded", sql_name, function( ply, result )
         logger:info( "Player {1} ({2}) data {3}.", ply:Nick(), ply:SteamID(), result and "successfully loaded" or "load failed" )
