@@ -16,15 +16,15 @@
         PLAYER:SetCountry( `string` country_code ) -- sets country code
         PLAYER:SetNick( `string` nickname ) -- Sets globaly player nickname
         `boolean` PLAYER:LoadData() -- Load player data
-        `boolean` PLAYER:SaveData() -- Save player data
-        PLAYER:SetData( key, value ) -- Set player data var
-        `any` PLAYER:GetData( key, default ) -- Get player data var
+        `boolean` PLAYER:SaveData( `boolean` force ) -- Save player data
+        PLAYER:SetData( `string` key, `any` value, `boolean` force ) -- Set player data var
+        `any` PLAYER:GetData( `string` key, `any` default ) -- Get player data var
         `table` PLAYER:GetAllData() -- Get all player data
 ```
 
 ### Hooks:
 ```lua
     GM:OnPlayerDropWeapon( `entity` ply, `entity` wep, `vector` target, `vector` velocity ) -- Return false for block weapon drop
-    GM:PlayerDataLoaded( ply, result, data ) -- Calls on player data is loaded and ready to use
-    GM:PlayerDataSaved( ply, result ) -- Calls after player data saved
+    GM:PlayerDataLoaded( `entity` ply, `boolean` result, `table` data ) -- Calls on player data is loaded and ready to use
+    GM:PlayerDataSaved( `entity` ply, `boolean` result ) -- Calls after player data saved
 ```
