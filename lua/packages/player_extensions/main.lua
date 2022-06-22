@@ -2,6 +2,29 @@ local packageName = "Player Extensions"
 local logger = GPM.Logger( packageName )
 local PLAYER = FindMetaTable( "Player" )
 
+do
+    local TEAM_SPECTATOR = TEAM_SPECTATOR
+    function PLAYER:IsSpectator()
+        return self:Team() == TEAM_SPECTATOR
+    end
+end
+
+do
+    local TEAM_UNASSIGNED = TEAM_UNASSIGNED
+    function PLAYER:IsUnassigned()
+        return self:Team() == TEAM_UNASSIGNED
+    end
+end
+
+do
+
+    local team_GetColor = team.GetColor
+    function PLAYER:TeamColor()
+        return team_GetColor( self:Team() )
+    end
+
+end
+
 /*
     Functions:
         `string` PLAYER:Country() - returns ISO 3166-1 alpha-2 countryc code
@@ -370,7 +393,10 @@ if (SERVER) then
 
     end
 
-    hook.Add( "PlayerInitialSpawn", sql_name, PLAYER.LoadData )
+    hook.Add( "PlayerInitialSpawn", sql_name, function( ply )
+        ply:LoadData()
+    end)
+
     hook.Add( "PlayerDisconnected", sql_name, PLAYER.SaveData )
 
     hook.Add("ShutDown", sql_name, function()
