@@ -427,3 +427,38 @@ if (SERVER) then
     end
 
 end
+
+/*
+    Functions:
+        Server:
+            `boolean` PLAYER:GetNoCollideWithPlayers() - Collision blocked?
+            PLAYER:SetNoCollideWithPlayers( `boolean` bool ) - Set `true` for block a player collision with other players
+*/
+if (SERVER) then
+
+    function PLAYER:GetNoCollideWithPlayers()
+        return self.NoCollideWithPlayers or false
+    end
+    
+    function PLAYER:SetNoCollideWithPlayers( bool )
+        local new = bool == true
+        self.NoCollideWithPlayers = new
+        if (new == false) then
+            self:SetCollisionGroup( self["NoCollideWithPlayers Original Group"] or COLLISION_GROUP_NONE )
+            self:SetAvoidPlayers( self["NoCollideWithPlayers Original Avoid"] or true )
+        end
+    end
+    
+    timer.Create( "Player Collision Update", 10, 0, function()
+        for num, ply in ipairs( player.GetAll() ) do
+            if ply:GetNoCollideWithPlayers() then
+                ply["NoCollideWithPlayers Original Group"] = ply["NoCollideWithPlayers Original Group"] or ply:GetCollisionGroup()
+                ply:SetCollisionGroup( COLLISION_GROUP_PASSABLE_DOOR )
+    
+                ply["NoCollideWithPlayers Original Avoid"] = ply["NoCollideWithPlayers Original Avoid"] or ply:GetAvoidPlayers()
+                ply:SetAvoidPlayers( false )
+            end
+        end
+    end)
+
+end
