@@ -414,6 +414,10 @@ if (SERVER) then
         logger:info( "Player {1} ({2}) data {3}.", ply:Nick(), ply:SteamID(), result and "successfully saved" or "save failed" )
     end)
 
+    function PLAYER:ClearData()
+        table.Empty( self.PlayerData )
+    end
+
     function PLAYER:SetData( key, value )
         self.PlayerData[ key ] = value
     end
@@ -425,6 +429,12 @@ if (SERVER) then
     function PLAYER:GetAllData()
         return self.PlayerData
     end
+
+    concommand.Add("lookup_my_data", function( ply )
+        if IsValid( ply ) then
+            ply:ChatPrint( util.TableToJSON( ply:GetAllData(), true ) )
+        end
+    end)
 
 end
 
