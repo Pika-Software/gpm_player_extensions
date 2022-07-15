@@ -13,6 +13,27 @@ function PLAYER:GetCurrentHull()
     end
 
     return self:GetHull()
+do
+    local TEAM_SPECTATOR = TEAM_SPECTATOR
+    function PLAYER:IsSpectator()
+        return self:Team() == TEAM_SPECTATOR
+    end
+end
+
+do
+    local TEAM_UNASSIGNED = TEAM_UNASSIGNED
+    function PLAYER:IsUnassigned()
+        return self:Team() == TEAM_UNASSIGNED
+    end
+end
+
+do
+
+    local team_GetColor = team.GetColor
+    function PLAYER:TeamColor()
+        return team_GetColor( self:Team() )
+    end
+
 end
 
 /*
@@ -383,7 +404,10 @@ if (SERVER) then
 
     end
 
-    hook.Add( "PlayerInitialSpawn", sql_name, PLAYER.LoadData )
+    hook.Add( "PlayerInitialSpawn", sql_name, function( ply )
+        ply:LoadData()
+    end)
+
     hook.Add( "PlayerDisconnected", sql_name, PLAYER.SaveData )
 
     hook.Add("ShutDown", sql_name, function()
@@ -401,6 +425,10 @@ if (SERVER) then
         logger:info( "Player {1} ({2}) data {3}.", ply:Nick(), ply:SteamID(), result and "successfully saved" or "save failed" )
     end)
 
+    function PLAYER:ClearData()
+        table.Empty( self.PlayerData )
+    end
+
     function PLAYER:SetData( key, value )
         self.PlayerData[ key ] = value
     end
@@ -412,5 +440,46 @@ if (SERVER) then
     function PLAYER:GetAllData()
         return self.PlayerData
     end
+
+    concommand.Add("lookup_my_data", function( ply )
+        if IsValid( ply ) then
+            ply:ChatPrint( util.TableToJSON( ply:GetAllData(), true ) )
+        end
+    end)
+
+end
+
+/*
+    Functions:
+        Server:
+            `boolean` PLAYER:GetNoCollideWithPlayers() - Collision blocked?
+            PLAYER:SetNoCollideWithPlayers( `boolean` bool ) - Set `true` for block a player collision with other players
+*/
+if (SERVER) then
+
+    function PLAYER:GetNoCollideWithPlayers()
+        return self.NoCollideWithPlayers or false
+    end
+
+    function PLAYER:SetNoCollideWithPlayers( bool )
+        local new = bool == true
+        self.NoCollideWithPlayers = new
+        if (new == false) then
+            self:SetCollisionGroup( self["NoCollideWithPlayers Original Group"] or COLLISION_GROUP_NONE )
+            self:SetAvoidPlayers( self["NoCollideWithPlayers Original Avoid"] or true )
+        end
+    end
+
+    timer.Create( "Player Collision Update", 10, 0, function()
+        for num, ply in ipairs( player.GetAll() ) do
+            if ply:GetNoCollideWithPlayers() then
+                ply["NoCollideWithPlayers Original Group"] = ply["NoCollideWithPlayers Original Group"] or ply:GetCollisionGroup()
+                ply:SetCollisionGroup( COLLISION_GROUP_PASSABLE_DOOR )
+
+                ply["NoCollideWithPlayers Original Avoid"] = ply["NoCollideWithPlayers Original Avoid"] or ply:GetAvoidPlayers()
+                ply:SetAvoidPlayers( false )
+            end
+        end
+    end)
 
 end
