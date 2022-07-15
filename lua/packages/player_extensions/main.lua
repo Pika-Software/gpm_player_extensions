@@ -13,6 +13,8 @@ function PLAYER:GetCurrentHull()
     end
 
     return self:GetHull()
+end
+
 do
     local TEAM_SPECTATOR = TEAM_SPECTATOR
     function PLAYER:IsSpectator()
