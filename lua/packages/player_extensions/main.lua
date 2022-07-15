@@ -2,6 +2,19 @@ local packageName = "Player Extensions"
 local logger = GPM.Logger( packageName )
 local PLAYER = FindMetaTable( "Player" )
 
+
+/*
+    Functions:
+        `vector` `vector` PLAYER:GetCurrentHull() - returns current players hull
+*/
+function PLAYER:GetCurrentHull()
+    if self:Crouching() then
+        return self:GetHullDuck()
+    end
+
+    return self:GetHull()
+end
+
 /*
     Functions:
         `string` PLAYER:Country() - returns ISO 3166-1 alpha-2 countryc code
